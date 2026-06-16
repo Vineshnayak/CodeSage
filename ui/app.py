@@ -14,6 +14,8 @@ import subprocess
 import shutil
 sys.path.append(str(Path(__file__).parent.parent))
 
+from config import GROQ_API_KEY
+
 from core.knowledge_graph import KnowledgeGraph
 from core.embeddings import EmbeddingStore
 from core.query_engine import QueryEngine
@@ -68,7 +70,11 @@ st.markdown("AI-powered Codebase Intelligence Platform")
 # Sidebar
 with st.sidebar:
     st.header("Configuration")
-    user_api_key = st.text_input("Groq API Key", type="password", help="Enter your Groq API Key (Free tier works!)")
+    if not GROQ_API_KEY:
+        user_api_key = st.text_input("Groq API Key", type="password", help="Enter your Groq API Key (Free tier works!)")
+    else:
+        user_api_key = GROQ_API_KEY
+        
     repo_url = st.text_input("GitHub Repo URL", placeholder="https://github.com/user/repo")
     
     if st.button("Clone & Analyze", type="primary"):
