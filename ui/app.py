@@ -279,7 +279,9 @@ with tab4:
             
             # Save and display
             try:
-                html_path = str(Path("data/graph/vis.html").resolve())
+                html_dir = Path("data/graph")
+                html_dir.mkdir(parents=True, exist_ok=True)
+                html_path = str((html_dir / "vis.html").resolve())
                 net.save_graph(html_path)
                 with open(html_path, "r", encoding="utf-8") as f:
                     components.html(f.read(), height=650)

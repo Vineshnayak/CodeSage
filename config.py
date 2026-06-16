@@ -14,6 +14,9 @@ DATA_DIR = BASE_DIR / "data"
 INDEX_DIR = DATA_DIR / "index"
 GRAPH_DIR = DATA_DIR / "graph"
 
+# Ensure data directories exist (critical for Hugging Face Spaces)
+INDEX_DIR.mkdir(parents=True, exist_ok=True)
+GRAPH_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── LLM Configuration ─────────────────────────────────────────────────────
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
