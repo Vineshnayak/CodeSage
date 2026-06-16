@@ -6,14 +6,11 @@ groq>=0.9.0
 
 # UI & API
 streamlit>=1.28.0
-pymongo>=4.6.1
 
 # Visualization
 pyvis>=0.3.2
 plotly>=5.18.0
 
-# File watching
-watchdog>=3.0.0
 
 # Utilities
 python-dotenv>=1.0.0

@@ -9,10 +9,13 @@ from core.knowledge_graph import KnowledgeGraph
 from core.embeddings import EmbeddingStore
 
 class QueryEngine:
-    def __init__(self, kg: KnowledgeGraph, vector_store: EmbeddingStore):
+    def __init__(self, kg: KnowledgeGraph, vector_store: EmbeddingStore, api_key: str = None):
         self.kg = kg
         self.vector_store = vector_store
-        self.client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
+        
+        # Use provided key, fallback to config for local dev
+        self.api_key = api_key or GROQ_API_KEY
+        self.client = Groq(api_key=self.api_key) if self.api_key else None
 
     def query(self, question: str) -> str:
         """Process a natural language query and return an answer."""
@@ -54,6 +57,9 @@ class QueryEngine:
         prompt = f"""You are an expert AI software architect and developer. 
 Answer the user's question about the codebase based ONLY on the provided context.
 
+IMPORTANT ANTI-HALLUCINATION INSTRUCTION:
+If the context doesn't contain enough information to answer fully or is completely unrelated to the question, state that clearly. Do NOT invent or hallucinate answers outside of the provided context.
+
 QUESTION:
 {question}
 
@@ -64,7 +70,6 @@ ARCHITECTURE CONTEXT (Knowledge graph relations):
 {graph_str}
 
 Please provide a detailed, accurate answer. Include code reasoning and mention specific files or functions.
-If the context doesn't contain enough information to answer fully, state that clearly.
 """
 
         # 3. Call LLM
@@ -87,14 +92,6 @@ If the context doesn't contain enough information to answer fully, state that cl
                 temperature=0.2
             )
             answer = response.choices[0].message.content
-            
-            try:
-                from db.database import save_chat_query
-                save_chat_query(question, answer, current_model)
-                print(f"✅ Successfully asked query and triggered MongoDB save!")
-            except Exception as e:
-                print(f"❌ Failed to reach or save to MongoDB in query engine: {e}")
-                
             return answer
         except Exception as e:
             return f"Error communicating with LLM: {str(e)}"

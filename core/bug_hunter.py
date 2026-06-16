@@ -3,9 +3,10 @@ from groq import Groq
 from core.query_engine import QueryEngine
 
 class BugHunterAgent:
-    def __init__(self, engine: QueryEngine):
+    def __init__(self, engine: QueryEngine, api_key: str = None):
         from config import GROQ_API_KEY
-        self.client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
+        self.api_key = api_key or GROQ_API_KEY
+        self.client = Groq(api_key=self.api_key) if self.api_key else None
         self.engine = engine
 
     def hunt_bug(self, traceback_text: str) -> str:
@@ -30,6 +31,9 @@ class BugHunterAgent:
         prompt = f"""You are an autonomous AI Debugging Agent.
 Analyze the provided Python traceback and identify the root cause of the bug based on the codebase context retrieved from the vector database.
 Explain the fix clearly and provide the corrected code.
+
+IMPORTANT ANTI-HALLUCINATION INSTRUCTION:
+If the provided RELATED CODEBASE CONTEXT does NOT contain the actual code causing the error or is completely unrelated, you MUST explicitly state that the relevant code was not found. Do NOT invent or hallucinate a fix based on unrelated context.
 
 TRACEBACK:
 {traceback_text}

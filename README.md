@@ -1,94 +1,76 @@
 # CodeSage
 
-CodeSage is a local codebase intelligence system that combines Retrieval-Augmented Generation (RAG) with static analysis to facilitate code exploration, refactoring, and quality assessment. By integrating Abstract Syntax Tree (AST) parsing, vector embeddings, and dependency graph traversal, the system provides contextual responses to architectural queries and calculates complexity metrics autonomously.
+CodeSage is a codebase analysis tool that combines static analysis and Retrieval-Augmented Generation (RAG) to assist with code exploration and refactoring. It uses Abstract Syntax Tree (AST) parsing, vector embeddings, and dependency graph traversal to answer architectural queries and compute complexity metrics.
 
----
+## Features
 
-## Technical Capabilities
-
-### 1. Semantic Codebase Querying
-Users can query the codebase using natural language. The system implements a Retrieval-Augmented Generation pipeline:
+### 1. Codebase Querying
+The system implements a RAG pipeline to process natural language queries about the codebase:
 - **Vector Search:** Converts queries into dense vector embeddings and retrieves relevant code segments from a local FAISS index.
-- **Graph Augmentation:** Extracts relational context (imports, class hierarchies, function calls) from an in-memory `NetworkX` graph.
-- **LLM Reasoning:** Passes the aggregated context to a Large Language Model (via Groq) to synthesize technically accurate responses based strictly on the provided codebase context.
+- **Graph Context:** Extracts structural relationships (imports, class hierarchies, function calls) using an in-memory `NetworkX` graph.
+- **LLM Integration:** Passes the context to a Large Language Model (via Groq) to synthesize responses based on the provided codebase data.
 
-### 2. Dependency Tracking & Impact Analysis
-The system constructs a relational dependency graph mapping files, classes, and methods. Users can supply a target module to compute its fan-in configuration, revealing downstream dependencies and calculating its overall modification risk tier (often referred to as a "blast radius" analysis).
+### 2. Dependency Graph and Impact Analysis
+Constructs a relational dependency graph mapping files, classes, and methods. Users can supply a target module to identify its downstream dependencies and evaluate the potential impact of modifications.
 
-### 3. AST Complexity Heuristics
-A static analysis engine utilizes Python's native `ast` module to evaluate code quality at runtime. It profiles the source code against explicit programmatic heuristics:
-- Cyclomatic complexity tracking (branching density and nested control structures).
-- Function length anomalies.
-- Parameter count thresholds.
-- Multiple-exit-point detection.
+### 3. Static Code Analysis
+Utilizes Python's native `ast` module to analyze source code complexity. It tracks:
+- Cyclomatic complexity.
+- Function length and parameter counts.
+- Multiple-exit-point control structures.
 
-### 4. Autonomous Agents & Refactoring
-CodeSage integrates specialized LLM-driven agents:
-- **Bug Hunter:** Ingests unformatted error tracebacks, traverses the vector index to identify the failing source file, and proposes programmatic fixes.
-- **Auto-Refactor:** Analyzes complex or unstructured code blocks and streams optimized, statically typed, and PEP-8 compliant suggestions back to the client interface.
+### 4. Assisted Refactoring and Debugging
+Integrates LLM-driven tools for code maintenance:
+- **Bug Hunter:** Analyzes error tracebacks, locates the failing source file using the vector index, and suggests fixes.
+- **Auto-Refactor:** Processes specified code blocks to recommend PEP-8 compliant and structurally improved alternatives.
 
-### 5. Persistent Observation & Storage
-- **Event-Driven Synchronization:** A `watchdog` daemon monitors the active directory tree for filesystem modifications, automatically calculating incremental semantic vectors and updating the AST graph to prevent index staleness.
-- **Query Logging:** Integrates with `pymongo` to persistently log historical interactions, metadata, and LLM responses natively into a MongoDB database process without blocking the visualization thread.
+### 5. File System Monitoring
+A watchdog daemon monitors the active directory tree for modifications, updating semantic vectors and the AST graph to maintain index consistency.
 
----
+## Technical Architecture
 
-## Technical Architecture & Stack
+*   **Analysis:** `ast`, `networkx`
+*   **Vector Search:** `sentence-transformers` (`all-MiniLM-L6-v2`), `faiss-cpu`
+*   **LLM API:** Groq (`llama-3.1-8b-instant`)
+*   **UI Framework:** Streamlit
 
-*   **Extraction & Mapping:** Native Python `ast`, `networkx`.
-*   **Vector Engine:** `sentence-transformers` (`all-MiniLM-L6-v2`) generating embeddings stored in `faiss-cpu`.
-*   **Reasoning API:** Groq (`llama-3.1-8b-instant`).
-*   **Storage Configuration:** MongoDB (`mongodb://127.0.0.1:27018`).
-*   **Interface Layer:** Streamlit runtime.
+## Setup and Deployment
 
----
-
-## Deployment & Setup
-
-**1. Environment Initialization**
-Ensure Python 3.10+ is installed on the host system.
+**1. Environment Setup**
+Requires Python 3.10 or higher.
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-**2. Environment Variables Configuration**
-Rename the `.env.example` template to `.env` and configure the required API values:
+**2. Configuration**
+Copy the `.env.example` template to `.env` and configure your API keys:
 ```ini
-GROQ_API_KEY=gsk_your_key_here
+GROQ_API_KEY=your_api_key_here
 LLM_MODEL=llama-3.1-8b-instant
 EMBEDDING_MODEL=all-MiniLM-L6-v2
 ```
 
-**3. MongoDB Provisioning**
-To enable the UI Query History feature, initialize an isolated MongoDB daemon on port `27018`:
-```bash
-mkdir -p ~/mongodb-codesage
-mongod --port 27018 --dbpath ~/mongodb-codesage
-```
+## Usage
 
----
+The application requires an initial index of the codebase to process queries.
 
-## Execution Routine
-
-The system relies on cached embeddings and graph nodes before the interface can effectively parse queries.
-
-**1. Calculate Base Index**
-Recursively parse the target directory to generate `.index`, `.json`, and `.pkl` artifacts.
+**1. Build the Index**
+Parse the target directory to generate the required index artifacts:
 ```bash
 python3 main.py index
 ```
 
-**2. Launch Visualization Client**
-Start the main application dashboard locally.
+**2. Start the Interface**
+Launch the Streamlit dashboard locally:
 ```bash
 python3 main.py ui
 ```
-*The Streamlit client will bind to `localhost:8501` by default.*
+*The Streamlit client runs on `localhost:8501` by default.*
 
-**3. Run Watchdog Daemon (Concurrent Task)**
-Optionally spin up a concurrent terminal to maintain index integrity as source code is modified in real-time.
+**3. Run the File Monitor (Optional)**
+Start a background process to update the index upon file modifications:
 ```bash
 python3 main.py watch
 ```

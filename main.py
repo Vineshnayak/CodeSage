@@ -5,9 +5,8 @@ from pathlib import Path
 from core.parser import ProjectParser
 from core.knowledge_graph import KnowledgeGraph
 from core.embeddings import EmbeddingStore
-from core.watcher import start_watcher
 
-def index_codebase(root_dir: str):
+def index_codebase(root_dir: str, skip_save: bool = False):
     """Full indexing pipeline: Parse -> Graph -> Embeddings"""
     print(f"Indexing project at: {root_dir}")
     
@@ -24,7 +23,7 @@ def index_codebase(root_dir: str):
     # 2. Build Knowledge Graph
     print("Building knowledge graph...")
     kg.build_from_modules(modules)
-    kg.save()
+    kg.save(skip_save=skip_save)
     print(f"Graph created with {len(kg.graph.nodes)} nodes and {len(kg.graph.edges)} edges.")
     
     # 3. Build Vector Store
@@ -39,7 +38,7 @@ def index_codebase(root_dir: str):
         except Exception as e:
             print(f"Error reading {filepath}: {e}")
             
-    vs.save()
+    vs.save(skip_save=skip_save)
     print(f"Vector store created with {len(vs.metadata)} chunks.")
     
     print("✅ Indexing Complete!")
@@ -47,7 +46,7 @@ def index_codebase(root_dir: str):
 
 def main():
     parser = argparse.ArgumentParser(description="CodeSage CLI")
-    parser.add_argument("command", choices=["index", "ui", "watch"], help="Command to run")
+    parser.add_argument("command", choices=["index", "ui"], help="Command to run")
     parser.add_argument("--dir", default=".", help="Project directory to index")
     
     args = parser.parse_args()
@@ -66,23 +65,7 @@ def main():
             
         print("Starting Streamlit UI...")
         os.system(f"streamlit run ui/app.py")
-        
-    elif args.command == "watch":
-        print("Starting file watcher daemon...")
-        kg = KnowledgeGraph()
-        kg.load()
-        vs = EmbeddingStore()
-        vs.load()
-        doc_parser = ProjectParser(target_dir)
-        
-        observer = start_watcher(target_dir, kg, vs, doc_parser)
-        try:
-            while True:
-                import time
-                time.sleep(1)
-        except KeyboardInterrupt:
-            observer.stop()
-        observer.join()
+
 
 if __name__ == "__main__":
     main()

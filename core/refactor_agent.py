@@ -2,9 +2,10 @@ import os
 from groq import Groq
 
 class RefactorAgent:
-    def __init__(self):
+    def __init__(self, api_key: str = None):
         from config import GROQ_API_KEY
-        self.client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
+        self.api_key = api_key or GROQ_API_KEY
+        self.client = Groq(api_key=self.api_key) if self.api_key else None
 
     def refactor_code(self, code: str, context: str) -> str:
         if not self.client:

@@ -9,6 +9,9 @@ from pathlib import Path
 
 # Fix relative imports when running from streamlit
 import sys
+import tempfile
+import subprocess
+import shutil
 sys.path.append(str(Path(__file__).parent.parent))
 
 from core.knowledge_graph import KnowledgeGraph
@@ -21,6 +24,7 @@ import streamlit.components.v1 as components
 from pyvis.network import Network
 from core.refactor_agent import RefactorAgent
 from core.bug_hunter import BugHunterAgent
+from main import index_codebase
 
 # Page Config
 st.set_page_config(
@@ -30,25 +34,67 @@ st.set_page_config(
 )
 
 # Initialize Core Services in Session State
-@st.cache_resource
-def init_services():
-    kg = KnowledgeGraph()
-    kg.load()
-    vs = EmbeddingStore()
-    vs.load()
-    engine = QueryEngine(kg, vs)
-    impact = ImpactAnalyzer(kg)
-    doc_gen = DocGenerator()
-    refactor = RefactorAgent()
-    bug_hunter = BugHunterAgent(engine)
-    return kg, vs, engine, impact, doc_gen, refactor, bug_hunter
-
-kg, vs, engine, impact, doc_gen, refactor, bug_hunter = init_services()
+def init_services(api_key: str, repo_url: str):
+    with st.spinner("Cloning repository..."):
+        temp_dir = tempfile.mkdtemp()
+        try:
+            subprocess.run(["git", "clone", repo_url, temp_dir], check=True, capture_output=True)
+        except subprocess.CalledProcessError as e:
+            st.error(f"Failed to clone repository: {e.stderr.decode()}")
+            return False
+            
+    with st.spinner("Indexing repository (this may take a minute)..."):
+        kg, vs, _ = index_codebase(temp_dir, skip_save=True)
+        engine = QueryEngine(kg, vs, api_key=api_key)
+        impact = ImpactAnalyzer(kg)
+        doc_gen = DocGenerator(api_key=api_key)
+        refactor = RefactorAgent(api_key=api_key)
+        bug_hunter = BugHunterAgent(engine, api_key=api_key)
+        
+        st.session_state['kg'] = kg
+        st.session_state['vs'] = vs
+        st.session_state['engine'] = engine
+        st.session_state['impact'] = impact
+        st.session_state['doc_gen'] = doc_gen
+        st.session_state['refactor'] = refactor
+        st.session_state['bug_hunter'] = bug_hunter
+        st.session_state['repo_url'] = repo_url
+        st.session_state['temp_dir'] = temp_dir
+        return True
 
 st.title("CodeSage")
-st.markdown("AI-powered Codebase Intelligence")
+st.markdown("AI-powered Codebase Intelligence Platform")
 
 # Sidebar
+with st.sidebar:
+    st.header("Configuration")
+    user_api_key = st.text_input("Groq API Key", type="password", help="Enter your Groq API Key (Free tier works!)")
+    repo_url = st.text_input("GitHub Repo URL", placeholder="https://github.com/user/repo")
+    
+    if st.button("Clone & Analyze", type="primary"):
+        if not user_api_key:
+            st.error("Please provide a Groq API Key.")
+        elif not repo_url:
+            st.error("Please provide a GitHub URL.")
+        else:
+            if init_services(user_api_key, repo_url):
+                st.success("Repository loaded successfully!")
+    
+    st.divider()
+
+if 'kg' not in st.session_state:
+    st.info("👈 Please enter your Groq API Key and a GitHub Repository URL in the sidebar to begin.")
+    st.stop()
+
+# Retrieve from session state
+kg = st.session_state['kg']
+vs = st.session_state['vs']
+engine = st.session_state['engine']
+impact = st.session_state['impact']
+doc_gen = st.session_state['doc_gen']
+refactor = st.session_state['refactor']
+bug_hunter = st.session_state['bug_hunter']
+
 with st.sidebar:
     st.header("Project Overview")
     nodes = len(kg.graph.nodes)
@@ -69,15 +115,14 @@ with st.sidebar:
     selected_file = st.selectbox("Select file to analyze", ["None"] + file_names)
 
 # Main Tabs
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "💬 Query Codebase", 
     "🕸️ Impact Analysis", 
     "🚨 Code Risk & Complexity",
     "📊 Architecture Graph",
     "📝 AI Auto-Docs",
     "🛠️ Auto-Refactor",
-    "🐞 Bug Hunter",
-    "🕒 Query History"
+    "🐞 Bug Hunter"
 ])
 
 # Tab 1: Query Codebase
@@ -110,31 +155,26 @@ with tab2:
     
     # We can select any node. Let's list files and functions.
     funcs = [n for n, d in kg.graph.nodes(data=True) if d.get("type") in ("function", "method")]
-    func_names = [kg.graph.nodes[n].get("name", n) for n in funcs]
     
+    def format_impact_target(node_id):
+        if node_id == "Select target...": return node_id
+        d = kg.graph.nodes[node_id]
+        if d.get("type") == "file":
+            return f"File: {d.get('path', node_id)}"
+        elif d.get("type") in ("function", "method"):
+            return f"Function: {d.get('name')} (in {d.get('file', '?')})"
+        return str(node_id)
+        
     analysis_target = st.selectbox(
         "Select to analyze blast radius:",
-        ["Select target..."] + [f"File: {f}" for f in file_names] + [f"Function: {f}" for f in func_names]
+        ["Select target..."] + file_nodes + funcs,
+        format_func=format_impact_target
     )
     
     if st.button("Calculate Impact", key="btn_impact"):
         if analysis_target != "Select target...":
             with st.spinner("Traversing dependency graph..."):
-                # Parse target
-                typ, name = analysis_target.split(": ", 1)
-                
-                # Find exact node id
-                target_node_id = None
-                if typ == "File":
-                    for n, d in kg.graph.nodes(data=True):
-                        if d.get("type") == "file" and d.get("path") == name:
-                            target_node_id = n
-                            break
-                elif typ == "Function":
-                    for n, d in kg.graph.nodes(data=True):
-                        if d.get("type") in ("function", "method") and d.get("name") == name:
-                            target_node_id = n
-                            break
+                target_node_id = analysis_target
                 
                 if target_node_id:
                     res = impact.analyze_impact(target_node_id, depth=3)
@@ -162,8 +202,8 @@ with tab3:
     
     if selected_file != "None":
         st.subheader(f"Analysis for `{selected_file}`")
-        # Ensure path is absolute relative to project root
-        file_path = Path(__file__).parent.parent / selected_file
+        # Ensure path is absolute relative to temp dir
+        file_path = Path(st.session_state['temp_dir']) / selected_file
         
         if file_path.exists():
             complexities = analyze_file_complexity(str(file_path))
@@ -245,9 +285,15 @@ with tab5:
     st.header("AI Documentation Generator")
     st.markdown("Automatically generate READMEs or function docstrings using the AI model.")
     
+    def format_doc_target(node_id):
+        if node_id == "Entire Project (README)": return node_id
+        d = kg.graph.nodes[node_id]
+        return f"Function: {d.get('name')} (in {d.get('file', '?')})"
+
     doc_target = st.selectbox(
         "Select an item to document:",
-        ["Entire Project (README)"] + [f"Function: {f}" for f in func_names]
+        ["Entire Project (README)"] + funcs,
+        format_func=format_doc_target
     )
     
     if st.button("Generate Docs", type="primary"):
@@ -262,14 +308,9 @@ with tab5:
                 with st.expander("Show Raw Markdown"):
                     st.code(res, language="markdown")
             else:
-                # Find the function and its code
-                func_name = doc_target.split(": ")[1]
-                # Try to locate the file line from the graph (naive approach)
-                func_node = None
-                for n, d in kg.graph.nodes(data=True):
-                    if d.get("name") == func_name and d.get("type") in ("function", "method"):
-                        func_node = d
-                        break
+                target_node_id = doc_target
+                func_node = kg.graph.nodes[target_node_id]
+                func_name = func_node.get("name")
                         
                 if func_node and "file" in func_node:
                     st.success(f"Found {func_name} in {func_node['file']} at line {func_node.get('lineno', '?')}.")
@@ -320,30 +361,4 @@ with tab7:
         else:
             st.warning("Please paste an error traceback.")
 
-# Tab 8: Query History
-with tab8:
-    st.header("🕒 Query History")
-    st.markdown("All questions asked to CodeSage are saved in your local MongoDB database.")
-    
-    if st.button("Refresh History", key="btn_refresh_history"):
-        pass # Streamlit natively refreshes on button click
-        
-    try:
-        from db.database import get_recent_chat_history
-        history = get_recent_chat_history(limit=50)
-        
-        if not history:
-            st.info("No query history found in the database. Head over to the Query codebase tab and ask your first question!")
-        else:
-            for idx, entry in enumerate(history):
-                    # Default empty string to avoid KeyError if schema changes early on
-                    q = entry.get('question', 'Unknown')
-                    m = entry.get('model_used', 'N/A')
-                    
-                    with st.expander(f"Q: {q}  |  (Model: {m})"):
-                        st.markdown("**Answer:**")
-                        st.write(entry.get('answer', ''))
-                        if 'timestamp' in entry:
-                            st.caption(f"Asked on: {entry['timestamp'].strftime('%Y-%m-%d %H:%M:%S')} UTC")
-    except Exception as e:
-        st.error(f"Error fetching MongoDB history: {e}")
+

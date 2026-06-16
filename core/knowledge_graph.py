@@ -93,7 +93,9 @@ class KnowledgeGraph:
         orphans = [node for node, degree in self.graph.degree() if degree == 0 and self.graph.nodes[node].get("type") in ("function_reference", "class_reference")]
         self.graph.remove_nodes_from(orphans)
 
-    def save(self, filename: str = "project_graph.gpickle"):
+    def save(self, filename: str = "project_graph.gpickle", skip_save: bool = False):
+        if skip_save:
+            return
         path = GRAPH_DIR / filename
         with open(path, "wb") as f:
             pickle.dump(self.graph, f)

@@ -14,9 +14,6 @@ DATA_DIR = BASE_DIR / "data"
 INDEX_DIR = DATA_DIR / "index"
 GRAPH_DIR = DATA_DIR / "graph"
 
-# Create directories if they don't exist
-INDEX_DIR.mkdir(parents=True, exist_ok=True)
-GRAPH_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── LLM Configuration ─────────────────────────────────────────────────────
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")

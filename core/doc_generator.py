@@ -8,8 +8,9 @@ from pathlib import Path
 from config import GROQ_API_KEY, LLM_MODEL
 
 class DocGenerator:
-    def __init__(self):
-        self.client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
+    def __init__(self, api_key: str = None):
+        self.api_key = api_key or GROQ_API_KEY
+        self.client = Groq(api_key=self.api_key) if self.api_key else None
 
     def generate_function_doc(self, logic_str: str) -> str:
         """Use LLM to generate a summary for a function based on its code."""
