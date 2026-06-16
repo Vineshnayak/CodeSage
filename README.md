@@ -1,3 +1,14 @@
+---
+title: CodeSage
+emoji: 🧠
+colorFrom: blue
+colorTo: green
+sdk: streamlit
+sdk_version: 1.28.0
+app_file: ui/app.py
+pinned: false
+---
+
 # CodeSage
 
 CodeSage is a codebase analysis tool that combines static analysis and Retrieval-Augmented Generation (RAG) to assist with code exploration and refactoring. It uses Abstract Syntax Tree (AST) parsing, vector embeddings, and dependency graph traversal to answer architectural queries and compute complexity metrics.
