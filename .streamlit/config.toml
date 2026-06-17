@@ -1,2 +1,9 @@
 [server]
 fileWatcherType = "none"
+
+[logger]
+level = "error"
+messageFormat = "%(asctime)s %(message)s"
+
+[browser]
+gatherUsageStats = false
